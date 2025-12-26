@@ -1,109 +1,43 @@
--- AIM JAILBREAK | AIMLOCK ONLY + GUI FINAL (Eclipse - Allusive Style Fixed)
+-- AIM JAILBREAK | AIMLOCK + ALLUSIVE STYLE GUI (FINAL FIX)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local Camera = workspace.CurrentCamera
 local TweenService = game:GetService("TweenService")
+local Camera = workspace.CurrentCamera
 
 local LP = Players.LocalPlayer
 
 -- ================= SETTINGS =================
 local AIM_ON = false
 local AIM_KEY = Enum.KeyCode.X
+local GUI_KEY = Enum.KeyCode.RightShift
 local PREDICTION = 0.08
 local lockedPlayer = nil
+local GUI_VISIBLE = true
+local waitingForKey = false
 
--- ================= NOTIFICATION =================
-local function createNotification(titleText, msgText, duration, callback)
-	local screenGui = Instance.new("ScreenGui")
-	screenGui.Name = "EclipseNotification"
-	screenGui.Parent = game.CoreGui
-	screenGui.ResetOnSpawn = false
-	screenGui.IgnoreGuiInset = true
-
-	local frame = Instance.new("Frame")
-	frame.Size = UDim2.new(0, 260, 0, 70)
-	frame.Position = UDim2.new(1, -280, 1, -90)
-	frame.BackgroundColor3 = Color3.fromRGB(35,35,35)
-	frame.BorderSizePixel = 0
-	frame.ClipsDescendants = true
-	frame.BackgroundTransparency = 1
-	frame.Parent = screenGui
-
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0,12)
-	corner.Parent = frame
-
-	local uiStroke = Instance.new("UIStroke")
-	uiStroke.Color = Color3.fromRGB(90,180,255)
-	uiStroke.Thickness = 1
-	uiStroke.Parent = frame
-
-	local title = Instance.new("TextLabel")
-	title.Size = UDim2.new(1,0,0,25)
-	title.Position = UDim2.new(0,0,0,0)
-	title.BackgroundTransparency = 1
-	title.Text = titleText
-	title.Font = Enum.Font.GothamBold
-	title.TextSize = 16
-	title.TextColor3 = Color3.fromRGB(90,180,255)
-	title.TextTransparency = 1
-	title.Parent = frame
-
-	local msg = Instance.new("TextLabel")
-	msg.Size = UDim2.new(1,0,0,45)
-	msg.Position = UDim2.new(0,0,0,25)
-	msg.BackgroundTransparency = 1
-	msg.Text = msgText
-	msg.Font = Enum.Font.Gotham
-	msg.TextSize = 14
-	msg.TextColor3 = Color3.fromRGB(255,255,255)
-	msg.TextWrapped = true
-	msg.TextTransparency = 1
-	msg.Parent = frame
-
-	local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quad)
-	TweenService:Create(frame, tweenInfo, {BackgroundTransparency = 0.1}):Play()
-	TweenService:Create(title, tweenInfo, {TextTransparency = 0}):Play()
-	TweenService:Create(msg, tweenInfo, {TextTransparency = 0}):Play()
-
-	task.delay(duration, function()
-		local fadeOut = TweenInfo.new(0.5, Enum.EasingStyle.Quad)
-		TweenService:Create(frame, fadeOut, {BackgroundTransparency = 1}):Play()
-		TweenService:Create(title, fadeOut, {TextTransparency = 1}):Play()
-		TweenService:Create(msg, fadeOut, {TextTransparency = 1}):Play()
-		task.delay(0.5, function()
-			frame:Destroy()
-			screenGui:Destroy()
-			if callback then
-				callback()
-			end
-		end)
-	end)
-end
-
--- ================= GET PLAYER UNDER CROSSHAIR =================
+-- ================= ENEMY CHECK =================
 local function isEnemy(p)
 	return p.Team and LP.Team and p.Team ~= LP.Team
 end
 
+-- ================= GET TARGET =================
 local function getPlayerUnderCrosshair()
 	local mousePos = UserInputService:GetMouseLocation()
-	local nearest, shortestDist
+	local nearest, shortest
 	for _,p in ipairs(Players:GetPlayers()) do
-		if p ~= LP
-			and isEnemy(p)
+		if p ~= LP and isEnemy(p)
 			and p.Character
-			and p.Character:FindFirstChild("HumanoidRootPart")
 			and p.Character:FindFirstChild("Head")
+			and p.Character:FindFirstChild("HumanoidRootPart")
 			and p.Character:FindFirstChild("Humanoid")
-			and p.Character.Humanoid.Health > 0
-		then
-			local headPos, onScreen = Camera:WorldToViewportPoint(p.Character.Head.Position)
-			if onScreen then
-				local dist = (Vector2.new(headPos.X, headPos.Y) - Vector2.new(mousePos.X, mousePos.Y)).Magnitude
-				if not shortestDist or dist < shortestDist then
-					shortestDist = dist
+			and p.Character.Humanoid.Health > 0 then
+
+			local pos, onscreen = Camera:WorldToViewportPoint(p.Character.Head.Position)
+			if onscreen then
+				local dist = (Vector2.new(pos.X,pos.Y)-mousePos).Magnitude
+				if not shortest or dist < shortest then
+					shortest = dist
 					nearest = p
 				end
 			end
@@ -112,153 +46,190 @@ local function getPlayerUnderCrosshair()
 	return nearest
 end
 
--- ================= HOTKEY =================
-UserInputService.InputBegan:Connect(function(input, gp)
-	if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
-	if input.KeyCode == AIM_KEY then
+-- ================= INPUT =================
+UserInputService.InputBegan:Connect(function(i,gp)
+	if gp then return end
+
+	if waitingForKey and i.UserInputType == Enum.UserInputType.Keyboard then
+		GUI_KEY = i.KeyCode
+		waitingForKey = false
+		return
+	end
+
+	if i.KeyCode == AIM_KEY then
 		if not AIM_ON then
 			lockedPlayer = getPlayerUnderCrosshair()
 		end
 		AIM_ON = not AIM_ON
 	end
+
+	if i.KeyCode == GUI_KEY then
+		GUI_VISIBLE = not GUI_VISIBLE
+	end
 end)
 
--- ================= AIMLOCK LOOP =================
+-- ================= AIM =================
 RunService.RenderStepped:Connect(function()
 	if AIM_ON and lockedPlayer and lockedPlayer.Character then
-		local char = lockedPlayer.Character
-		local head = char:FindFirstChild("Head")
-		local hrp = char:FindFirstChild("HumanoidRootPart")
-		local hum = char:FindFirstChild("Humanoid")
+		local h = lockedPlayer.Character:FindFirstChild("Head")
+		local hrp = lockedPlayer.Character:FindFirstChild("HumanoidRootPart")
+		local hum = lockedPlayer.Character:FindFirstChild("Humanoid")
 
-		if head and hrp and hum and hum.Health > 0 and isEnemy(lockedPlayer) then
-			local aimPos = head.Position + (hrp.Velocity * PREDICTION)
-			Camera.CFrame = CFrame.new(Camera.CFrame.Position, aimPos)
+		if h and hrp and hum and hum.Health > 0 and isEnemy(lockedPlayer) then
+			Camera.CFrame = CFrame.new(
+				Camera.CFrame.Position,
+				h.Position + hrp.Velocity * PREDICTION
+			)
 		end
 	end
 end)
 
--- ================= MAIN GUI =================
-local function createMainGUI()
-	local gui = Instance.new("ScreenGui")
-	gui.Name = "AimJailbreakGUI"
-	gui.Parent = game.CoreGui
-	gui.ResetOnSpawn = false
-	gui.IgnoreGuiInset = true
+-- ================= NOTIFICATION =================
+local function notify(txt)
+	local g = Instance.new("ScreenGui",game.CoreGui)
+	g.IgnoreGuiInset = true
 
-	local board = Instance.new("Frame")
-	board.Parent = gui
-	board.Size = UDim2.new(0, 340, 0, 120)
-	board.Position = UDim2.new(0.5, -170, 0.5, -60)
-	board.BackgroundColor3 = Color3.fromRGB(30,30,30)
-	board.BorderSizePixel = 0
-	board.BackgroundTransparency = 1
-	board.ZIndex = 10
+	local f = Instance.new("Frame",g)
+	f.Size = UDim2.new(0,260,0,70)
+	f.Position = UDim2.new(1,-280,1,-90)
+	f.BackgroundColor3 = Color3.fromRGB(35,35,35)
+	f.BackgroundTransparency = 1
+	f.BorderSizePixel = 0
+	Instance.new("UICorner",f).CornerRadius = UDim.new(0,12)
 
-	local grad = Instance.new("UIGradient")
-	grad.Color = ColorSequence.new{ColorSequenceKeypoint.new(0, Color3.fromRGB(45,45,45)), ColorSequenceKeypoint.new(1, Color3.fromRGB(25,25,25))}
-	grad.Rotation = 45
-	grad.Parent = board
+	local t = Instance.new("TextLabel",f)
+	t.Size = UDim2.new(1,0,1,0)
+	t.BackgroundTransparency = 1
+	t.Text = "Eclipse HUB\n"..txt
+	t.Font = Enum.Font.Gotham
+	t.TextSize = 14
+	t.TextColor3 = Color3.new(1,1,1)
+	t.TextTransparency = 1
 
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0,14)
-	corner.Parent = board
+	TweenService:Create(f,TweenInfo.new(.4),{BackgroundTransparency=.1}):Play()
+	TweenService:Create(t,TweenInfo.new(.4),{TextTransparency=0}):Play()
 
-	local uiStroke = Instance.new("UIStroke")
-	uiStroke.Color = Color3.fromRGB(90,180,255)
-	uiStroke.Thickness = 1
-	uiStroke.Parent = board
-
-	-- Title
-	local title = Instance.new("TextLabel")
-	title.Parent = board
-	title.Size = UDim2.new(1,0,0,30)
-	title.Position = UDim2.new(0,0,0,5)
-	title.BackgroundTransparency = 1
-	title.Text = "Eclipse HUB"
-	title.Font = Enum.Font.GothamBold
-	title.TextSize = 18
-	title.TextColor3 = Color3.fromRGB(90,180,255)
-	title.TextTransparency = 1
-	title.ZIndex = 11
-
-	-- Status
-	local statusLabel = Instance.new("TextLabel")
-	statusLabel.Parent = board
-	statusLabel.Size = UDim2.new(1,0,0,30)
-	statusLabel.Position = UDim2.new(0,0,0,45)
-	statusLabel.BackgroundTransparency = 1
-	statusLabel.Text = "AIMLOCK: OFF [X]"
-	statusLabel.Font = Enum.Font.Gotham
-	statusLabel.TextSize = 16
-	statusLabel.TextColor3 = Color3.fromRGB(255,80,80)
-	statusLabel.TextTransparency = 1
-	statusLabel.ZIndex = 11
-
-	-- Credit
-	local credit = Instance.new("TextLabel")
-	credit.Parent = board
-	credit.Size = UDim2.new(1,0,0,20)
-	credit.Position = UDim2.new(0,0,0,80)
-	credit.BackgroundTransparency = 1
-	credit.Text = "Credit: Eclipse"
-	credit.Font = Enum.Font.Gotham
-	credit.TextSize = 14
-	credit.TextColor3 = Color3.fromRGB(180,180,180)
-	credit.TextTransparency = 1
-	credit.ZIndex = 11
-
-	-- Divider
-	local divider = Instance.new("Frame")
-	divider.Parent = board
-	divider.Size = UDim2.new(1, -20, 0, 1)
-	divider.Position = UDim2.new(0, 10, 0, 78)
-	divider.BackgroundColor3 = Color3.fromRGB(90,180,255)
-	divider.BorderSizePixel = 0
-	divider.BackgroundTransparency = 0.3
-	divider.ZIndex = 11
-
-	local tweenInfo = TweenInfo.new(0.8, Enum.EasingStyle.Quad)
-	TweenService:Create(board, tweenInfo, {BackgroundTransparency = 0.15}):Play()
-	TweenService:Create(title, tweenInfo, {TextTransparency = 0}):Play()
-	TweenService:Create(statusLabel, tweenInfo, {TextTransparency = 0}):Play()
-	TweenService:Create(credit, tweenInfo, {TextTransparency = 0}):Play()
-	TweenService:Create(divider, tweenInfo, {BackgroundTransparency = 0}):Play()
-
-	-- Drag
-	local dragging, dragStart, startPos
-	board.InputBegan:Connect(function(i)
-		if i.UserInputType == Enum.UserInputType.MouseButton1 then
-			dragging = true
-			dragStart = i.Position
-			startPos = board.Position
-		end
-	end)
-	UserInputService.InputChanged:Connect(function(i)
-		if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
-			local delta = i.Position - dragStart
-			board.Position = UDim2.new(
-				startPos.X.Scale, startPos.X.Offset + delta.X,
-				startPos.Y.Scale, startPos.Y.Offset + delta.Y
-			)
-		end
-	end)
-	UserInputService.InputEnded:Connect(function(i)
-		if i.UserInputType == Enum.UserInputType.MouseButton1 then
-			dragging = false
-		end
-	end)
-
-	-- Update status label
-	RunService.RenderStepped:Connect(function()
-		statusLabel.Text = AIM_ON and "AIMLOCK: ON [X]" or "AIMLOCK: OFF [X]"
-		statusLabel.TextColor3 = AIM_ON and Color3.fromRGB(80,255,120) or Color3.fromRGB(255,80,80)
+	task.delay(5,function()
+		TweenService:Create(f,TweenInfo.new(.3),{BackgroundTransparency=1}):Play()
+		TweenService:Create(t,TweenInfo.new(.3),{TextTransparency=1}):Play()
+		task.delay(.4,function()
+			g:Destroy()
+		end)
 	end)
 end
 
--- ================= START =================
-createNotification("Eclipse HUB", "Please wait 5 seconds...", 5, function()
-	createMainGUI()
+notify("Please wait 5 seconds...")
+task.wait(5)
+
+-- ================= GUI =================
+local gui = Instance.new("ScreenGui",game.CoreGui)
+gui.IgnoreGuiInset = true
+
+local board = Instance.new("Frame",gui)
+board.Size = UDim2.new(0,340,0,150)
+board.Position = UDim2.new(.5,-170,.56,-75)
+board.BackgroundColor3 = Color3.fromRGB(30,30,30)
+board.BackgroundTransparency = 1
+board.BorderSizePixel = 0
+board.Visible = false
+
+Instance.new("UICorner",board).CornerRadius = UDim.new(0,14)
+
+local stroke = Instance.new("UIStroke",board)
+stroke.Color = Color3.fromRGB(90,180,255)
+stroke.Transparency = 1
+
+local title = Instance.new("TextLabel",board)
+title.Size = UDim2.new(1,0,0,30)
+title.Text = "Eclipse HUB"
+title.Font = Enum.Font.GothamBold
+title.TextSize = 18
+title.TextColor3 = Color3.fromRGB(90,180,255)
+title.BackgroundTransparency = 1
+title.TextTransparency = 1
+
+local status = Instance.new("TextLabel",board)
+status.Position = UDim2.new(0,0,0,40)
+status.Size = UDim2.new(1,0,0,25)
+status.Font = Enum.Font.Gotham
+status.TextSize = 16
+status.BackgroundTransparency = 1
+status.TextTransparency = 1
+
+local keybtn = Instance.new("TextButton",board)
+keybtn.Position = UDim2.new(0.1,0,0.65,0)
+keybtn.Size = UDim2.new(0.8,0,0,30)
+keybtn.Text = "GUI KEY : "..GUI_KEY.Name
+keybtn.Font = Enum.Font.Gotham
+keybtn.TextSize = 14
+keybtn.BackgroundColor3 = Color3.fromRGB(45,45,45)
+keybtn.TextColor3 = Color3.new(1,1,1)
+Instance.new("UICorner",keybtn)
+
+keybtn.MouseButton1Click:Connect(function()
+	waitingForKey = true
 end)
 
-print("Aim Jailbreak Season 30 | Aimlock loaded ✅")
+-- ================= GUI ANIMATION =================
+local guiTween
+
+local function showGUI()
+	if guiTween then guiTween:Cancel() end
+	board.Visible = true
+	board.Position = UDim2.new(.5,-170,.53,-75)
+
+	guiTween = TweenService:Create(
+		board,
+		TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+		{
+			BackgroundTransparency = 0.15,
+			Position = UDim2.new(.5,-170,.5,-75)
+		}
+	)
+	guiTween:Play()
+
+	TweenService:Create(title,TweenInfo.new(.35),{TextTransparency=0}):Play()
+	TweenService:Create(status,TweenInfo.new(.35),{TextTransparency=0}):Play()
+	TweenService:Create(stroke,TweenInfo.new(.35),{Transparency=0}):Play()
+end
+
+local function hideGUI()
+	if guiTween then guiTween:Cancel() end
+
+	guiTween = TweenService:Create(
+		board,
+		TweenInfo.new(0.18, Enum.EasingStyle.Linear),
+		{
+			BackgroundTransparency = 1,
+			Position = UDim2.new(.5,-170,.56,-75)
+		}
+	)
+	guiTween:Play()
+
+	TweenService:Create(title,TweenInfo.new(.15),{TextTransparency=1}):Play()
+	TweenService:Create(status,TweenInfo.new(.15),{TextTransparency=1}):Play()
+	TweenService:Create(stroke,TweenInfo.new(.15),{Transparency=1}):Play()
+
+	task.delay(0.18,function()
+		board.Visible = false
+	end)
+end
+
+-- ================= UPDATE =================
+RunService.RenderStepped:Connect(function()
+	if GUI_VISIBLE then
+		if not board.Visible then showGUI() end
+	else
+		if board.Visible then hideGUI() end
+	end
+
+	status.Text = AIM_ON and "AIMLOCK : ON ["..AIM_KEY.Name.."]"
+		or "AIMLOCK : OFF ["..AIM_KEY.Name.."]"
+	status.TextColor3 = AIM_ON and Color3.fromRGB(80,255,120)
+		or Color3.fromRGB(255,80,80)
+
+	keybtn.Text = waitingForKey and "PRESS ANY KEY..."
+		or ("GUI KEY : "..GUI_KEY.Name)
+end)
+
+print("Eclipse HUB loaded ✅")
