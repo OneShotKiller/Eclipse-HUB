@@ -23,6 +23,10 @@ local lockedPlayer = nil
 local GUI_VISIBLE = true
 local waitingForKey = false
 
+-- PANEL STATE
+local PANEL_VISIBLE = false
+local PANEL_TWEENING = false
+
 -- ================= POLICE CHECK =================
 local function isPolice(p)
 	return p ~= LP and p.Team and p.Team.Name == "Police"
@@ -77,6 +81,11 @@ UserInputService.InputBegan:Connect(function(i,gp)
 
 	if i.KeyCode == GUI_KEY then
 		GUI_VISIBLE = not GUI_VISIBLE
+		if GUI_VISIBLE then
+			showPanel()
+		else
+			hidePanel()
+		end
 	end
 end)
 
@@ -147,12 +156,11 @@ local function applyESP(p)
 			bill.Enabled = true
 		end
 
-		-- ===== CHỈ PHẦN NÀY ĐƯỢC THÊM: ĐỔI MÀU THEO KHOẢNG CÁCH =====
+		-- ĐỔI MÀU THEO KHOẢNG CÁCH (XA = XANH | GẦN = ĐỎ)
 		local ratio = math.clamp(dist / ESP_RANGE, 0, 1)
 		local r = math.floor(255 * (1 - ratio))
 		local g = math.floor(255 * ratio)
 		txt.TextColor3 = Color3.fromRGB(r, g, 80)
-		-- ===========================================================
 
 		txt.Text = string.format(
 			"[POLICE] %s | HP:%d | %dm",
@@ -187,19 +195,19 @@ RunService.RenderStepped:Connect(function()
 	end
 end)
 
--- ================= NOTIFY =================
+-- ================= NOTIFY (ANIMATION FULL) =================
 local function notify(txt)
-	local g = Instance.new("ScreenGui",game.CoreGui)
+	local g = Instance.new("ScreenGui", game.CoreGui)
 	g.IgnoreGuiInset = true
 
-	local f = Instance.new("Frame",g)
+	local f = Instance.new("Frame", g)
 	f.Size = UDim2.new(0,260,0,70)
-	f.Position = UDim2.new(1,-280,1,-90)
+	f.Position = UDim2.new(1,-280,1,-60)
 	f.BackgroundColor3 = Color3.fromRGB(35,35,35)
 	f.BackgroundTransparency = 1
-	Instance.new("UICorner",f)
+	Instance.new("UICorner", f)
 
-	local t = Instance.new("TextLabel",f)
+	local t = Instance.new("TextLabel", f)
 	t.Size = UDim2.new(1,0,1,0)
 	t.BackgroundTransparency = 1
 	t.Text = "Eclipse HUB\n"..txt
@@ -208,16 +216,32 @@ local function notify(txt)
 	t.TextColor3 = Color3.new(1,1,1)
 	t.TextTransparency = 1
 
-	TweenService:Create(f,TweenInfo.new(.4),{BackgroundTransparency=.1}):Play()
-	TweenService:Create(t,TweenInfo.new(.4),{TextTransparency=0}):Play()
+	TweenService:Create(f,TweenInfo.new(0.35,Enum.EasingStyle.Quart,Enum.EasingDirection.Out),{
+		BackgroundTransparency = 0.15,
+		Position = UDim2.new(1,-280,1,-90)
+	}):Play()
+
+	TweenService:Create(t,TweenInfo.new(0.35),{
+		TextTransparency = 0
+	}):Play()
 
 	task.delay(5,function()
-		g:Destroy()
+		TweenService:Create(f,TweenInfo.new(0.25,Enum.EasingStyle.Quad,Enum.EasingDirection.In),{
+			BackgroundTransparency = 1,
+			Position = UDim2.new(1,-280,1,-60)
+		}):Play()
+
+		TweenService:Create(t,TweenInfo.new(0.25),{
+			TextTransparency = 1
+		}):Play()
+
+		task.delay(0.25,function()
+			g:Destroy()
+		end)
 	end)
 end
 
 notify("Please wait 5 seconds...")
-task.wait(5)
 
 -- ================= GUI =================
 local gui = Instance.new("ScreenGui",game.CoreGui)
@@ -272,19 +296,52 @@ keyBtn.MouseButton1Click:Connect(function()
 	keyBtn.Text = "PRESS ANY KEY..."
 end)
 
--- ================= GUI ANIMATION + UPDATE (NGUYÊN BẢN) =================
-RunService.RenderStepped:Connect(function()
-	if GUI_VISIBLE then
-		board.Visible = true
-		board.BackgroundTransparency = 0.15
-		title.TextTransparency = 0
-		aimStatus.TextTransparency = 0
-		espStatus.TextTransparency = 0
-		keyBtn.TextTransparency = 0
-	else
-		board.Visible = false
+-- ================= PANEL ANIMATION =================
+function showPanel()
+	if PANEL_TWEENING or PANEL_VISIBLE then return end
+	PANEL_TWEENING = true
+	PANEL_VISIBLE = true
+
+	board.Visible = true
+	board.BackgroundTransparency = 1
+	board.Position = UDim2.new(.5,-170,.56,-115)
+
+	TweenService:Create(board,TweenInfo.new(0.35,Enum.EasingStyle.Quart,Enum.EasingDirection.Out),{
+		BackgroundTransparency = 0.15,
+		Position = UDim2.new(.5,-170,.5,-115)
+	}):Play()
+
+	for _,v in ipairs({title,aimStatus,espStatus,keyBtn}) do
+		TweenService:Create(v,TweenInfo.new(0.35),{TextTransparency=0}):Play()
 	end
 
+	task.delay(0.35,function()
+		PANEL_TWEENING = false
+	end)
+end
+
+function hidePanel()
+	if PANEL_TWEENING or not PANEL_VISIBLE then return end
+	PANEL_TWEENING = true
+	PANEL_VISIBLE = false
+
+	TweenService:Create(board,TweenInfo.new(0.25,Enum.EasingStyle.Quad,Enum.EasingDirection.In),{
+		BackgroundTransparency = 1,
+		Position = UDim2.new(.5,-170,.56,-115)
+	}):Play()
+
+	for _,v in ipairs({title,aimStatus,espStatus,keyBtn}) do
+		TweenService:Create(v,TweenInfo.new(0.25),{TextTransparency=1}):Play()
+	end
+
+	task.delay(0.25,function()
+		board.Visible = false
+		PANEL_TWEENING = false
+	end)
+end
+
+-- ================= GUI UPDATE ONLY =================
+RunService.RenderStepped:Connect(function()
 	aimStatus.Text = AIM_ON and "AIMLOCK : ON [X]" or "AIMLOCK : OFF [X]"
 	aimStatus.TextColor3 = AIM_ON and Color3.fromRGB(80,255,120) or Color3.fromRGB(255,80,80)
 
@@ -293,4 +350,9 @@ RunService.RenderStepped:Connect(function()
 
 	keyBtn.Text = waitingForKey and "PRESS ANY KEY..."
 		or ("GUI KEY : "..GUI_KEY.Name:upper())
+end)
+
+-- HIỆN PANEL LẦN ĐẦU CÓ ANIMATION
+task.delay(5,function()
+	showPanel()
 end)
