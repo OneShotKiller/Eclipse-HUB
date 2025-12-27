@@ -1,4 +1,5 @@
--- AIM JAILBREAK | AIMLOCK POLICE ONLY + ALLUSIVE STYLE GUI (FINAL FIX)
+-- AIM JAILBREAK | AIMLOCK POLICE ONLY + ESP POLICE (ECLIPSE GUI FINAL)
+
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -9,23 +10,29 @@ local LP = Players.LocalPlayer
 
 -- ================= SETTINGS =================
 local AIM_ON = false
+local ESP_ON = false
+
 local AIM_KEY = Enum.KeyCode.X
+local ESP_KEY = Enum.KeyCode.N
 local GUI_KEY = Enum.KeyCode.RightShift
+
+local ESP_RANGE = 3200
 local PREDICTION = 0.08
+
 local lockedPlayer = nil
 local GUI_VISIBLE = true
 local waitingForKey = false
 
--- ================= ENEMY CHECK (POLICE ONLY) =================
+-- ================= POLICE CHECK =================
 local function isPolice(p)
-	-- Chỉ target police, bỏ crim và các team khác
-	return p.Team and p.Team.Name == "Police" and p ~= LP
+	return p ~= LP and p.Team and p.Team.Name == "Police"
 end
 
--- ================= GET TARGET =================
+-- ================= AIM TARGET =================
 local function getNearestPolice()
 	local mousePos = UserInputService:GetMouseLocation()
 	local nearest, shortest
+
 	for _,p in ipairs(Players:GetPlayers()) do
 		if isPolice(p)
 			and p.Character
@@ -36,7 +43,7 @@ local function getNearestPolice()
 
 			local pos, onscreen = Camera:WorldToViewportPoint(p.Character.Head.Position)
 			if onscreen then
-				local dist = (Vector2.new(pos.X,pos.Y)-mousePos).Magnitude
+				local dist = (Vector2.new(pos.X,pos.Y) - mousePos).Magnitude
 				if not shortest or dist < shortest then
 					shortest = dist
 					nearest = p
@@ -64,6 +71,10 @@ UserInputService.InputBegan:Connect(function(i,gp)
 		AIM_ON = not AIM_ON
 	end
 
+	if i.KeyCode == ESP_KEY then
+		ESP_ON = not ESP_ON
+	end
+
 	if i.KeyCode == GUI_KEY then
 		GUI_VISIBLE = not GUI_VISIBLE
 	end
@@ -83,7 +94,94 @@ RunService.RenderStepped:Connect(function()
 	end
 end)
 
--- ================= NOTIFICATION =================
+-- ================= ESP SYSTEM =================
+local ESP_CACHE = {}
+
+local function removeESP(p)
+	if ESP_CACHE[p] then
+		ESP_CACHE[p]:Destroy()
+		ESP_CACHE[p] = nil
+	end
+end
+
+local function applyESP(p)
+	if not ESP_ON then return end
+	if not isPolice(p) then return end
+	if not p.Character then return end
+	if ESP_CACHE[p] then return end
+
+	local hum = p.Character:FindFirstChild("Humanoid")
+	local hrp = p.Character:FindFirstChild("HumanoidRootPart")
+	if not hum or not hrp then return end
+
+	local bill = Instance.new("BillboardGui")
+	bill.Name = "PoliceESP"
+	bill.Size = UDim2.new(0,320,0,30)
+	bill.AlwaysOnTop = true
+	bill.Adornee = hrp
+	bill.Parent = game.CoreGui
+
+	local txt = Instance.new("TextLabel", bill)
+	txt.Size = UDim2.new(1,0,1,0)
+	txt.BackgroundTransparency = 1
+	txt.TextColor3 = Color3.fromRGB(80,180,255)
+	txt.TextStrokeTransparency = 0
+	txt.Font = Enum.Font.GothamBold
+	txt.TextSize = 14
+	txt.TextXAlignment = Enum.TextXAlignment.Center
+	txt.TextYAlignment = Enum.TextYAlignment.Center
+
+	RunService.RenderStepped:Connect(function()
+		if not ESP_ON or not p.Character or hum.Health <= 0 then
+			removeESP(p)
+			return
+		end
+
+		local myHRP = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+		if not myHRP then return end
+
+		local dist = (myHRP.Position - hrp.Position).Magnitude
+		if dist > ESP_RANGE then
+			bill.Enabled = false
+			return
+		else
+			bill.Enabled = true
+		end
+
+		txt.Text = string.format(
+			"[POLICE] %s | HP:%d | %dm",
+			p.Name,
+			math.floor(hum.Health),
+			math.floor(dist)
+		)
+	end)
+
+	ESP_CACHE[p] = bill
+end
+
+local function hookPlayer(p)
+	p.CharacterAdded:Connect(function()
+		task.wait(0.5)
+		applyESP(p)
+	end)
+end
+
+for _,p in ipairs(Players:GetPlayers()) do
+	hookPlayer(p)
+end
+
+Players.PlayerAdded:Connect(hookPlayer)
+Players.PlayerRemoving:Connect(removeESP)
+
+RunService.RenderStepped:Connect(function()
+	if ESP_ON then
+		for _,p in ipairs(Players:GetPlayers()) do
+			applyESP(p)
+		end
+	end
+end)
+
+-- ================= NOTIFY =================
 local function notify(txt)
 	local g = Instance.new("ScreenGui",game.CoreGui)
 	g.IgnoreGuiInset = true
@@ -93,8 +191,7 @@ local function notify(txt)
 	f.Position = UDim2.new(1,-280,1,-90)
 	f.BackgroundColor3 = Color3.fromRGB(35,35,35)
 	f.BackgroundTransparency = 1
-	f.BorderSizePixel = 0
-	Instance.new("UICorner",f).CornerRadius = UDim.new(0,12)
+	Instance.new("UICorner",f)
 
 	local t = Instance.new("TextLabel",f)
 	t.Size = UDim2.new(1,0,1,0)
@@ -109,11 +206,7 @@ local function notify(txt)
 	TweenService:Create(t,TweenInfo.new(.4),{TextTransparency=0}):Play()
 
 	task.delay(5,function()
-		TweenService:Create(f,TweenInfo.new(.3),{BackgroundTransparency=1}):Play()
-		TweenService:Create(t,TweenInfo.new(.3),{TextTransparency=1}):Play()
-		task.delay(.4,function()
-			g:Destroy()
-		end)
+		g:Destroy()
 	end)
 end
 
@@ -125,18 +218,13 @@ local gui = Instance.new("ScreenGui",game.CoreGui)
 gui.IgnoreGuiInset = true
 
 local board = Instance.new("Frame",gui)
-board.Size = UDim2.new(0,340,0,150)
-board.Position = UDim2.new(.5,-170,.56,-75)
+board.Size = UDim2.new(0,340,0,230)
+board.Position = UDim2.new(.5,-170,.56,-115)
 board.BackgroundColor3 = Color3.fromRGB(30,30,30)
 board.BackgroundTransparency = 1
 board.BorderSizePixel = 0
 board.Visible = false
-
-Instance.new("UICorner",board).CornerRadius = UDim.new(0,14)
-
-local stroke = Instance.new("UIStroke",board)
-stroke.Color = Color3.fromRGB(90,180,255)
-stroke.Transparency = 1
+Instance.new("UICorner",board)
 
 local title = Instance.new("TextLabel",board)
 title.Size = UDim2.new(1,0,0,30)
@@ -147,26 +235,35 @@ title.TextColor3 = Color3.fromRGB(90,180,255)
 title.BackgroundTransparency = 1
 title.TextTransparency = 1
 
-local status = Instance.new("TextLabel",board)
-status.Position = UDim2.new(0,0,0,40)
-status.Size = UDim2.new(1,0,0,25)
-status.Font = Enum.Font.Gotham
-status.TextSize = 16
-status.BackgroundTransparency = 1
-status.TextTransparency = 1
+local aimStatus = Instance.new("TextLabel",board)
+aimStatus.Position = UDim2.new(0,0,0,40)
+aimStatus.Size = UDim2.new(1,0,0,25)
+aimStatus.Font = Enum.Font.Gotham
+aimStatus.TextSize = 16
+aimStatus.BackgroundTransparency = 1
+aimStatus.TextTransparency = 1
 
-local keybtn = Instance.new("TextButton",board)
-keybtn.Position = UDim2.new(0.1,0,0.65,0)
-keybtn.Size = UDim2.new(0.8,0,0,30)
-keybtn.Text = "GUI KEY : "..GUI_KEY.Name
-keybtn.Font = Enum.Font.Gotham
-keybtn.TextSize = 14
-keybtn.BackgroundColor3 = Color3.fromRGB(45,45,45)
-keybtn.TextColor3 = Color3.new(1,1,1)
-Instance.new("UICorner",keybtn)
+local espStatus = Instance.new("TextLabel",board)
+espStatus.Position = UDim2.new(0,0,0,70)
+espStatus.Size = UDim2.new(1,0,0,25)
+espStatus.Font = Enum.Font.Gotham
+espStatus.TextSize = 16
+espStatus.BackgroundTransparency = 1
+espStatus.TextTransparency = 1
 
-keybtn.MouseButton1Click:Connect(function()
+local keyBtn = Instance.new("TextButton",board)
+keyBtn.Position = UDim2.new(0.1,0,0,110)
+keyBtn.Size = UDim2.new(0.8,0,0,30)
+keyBtn.BackgroundColor3 = Color3.fromRGB(45,45,45)
+keyBtn.TextColor3 = Color3.new(1,1,1)
+keyBtn.Font = Enum.Font.Gotham
+keyBtn.TextSize = 14
+keyBtn.Text = "GUI KEY : "..GUI_KEY.Name:upper()
+Instance.new("UICorner",keyBtn)
+
+keyBtn.MouseButton1Click:Connect(function()
 	waitingForKey = true
+	keyBtn.Text = "PRESS ANY KEY..."
 end)
 
 -- ================= GUI ANIMATION =================
@@ -175,21 +272,22 @@ local guiTween
 local function showGUI()
 	if guiTween then guiTween:Cancel() end
 	board.Visible = true
-	board.Position = UDim2.new(.5,-170,.53,-75)
+	board.Position = UDim2.new(.5,-170,.53,-115)
 
 	guiTween = TweenService:Create(
 		board,
-		TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+		TweenInfo.new(0.35,Enum.EasingStyle.Quart,Enum.EasingDirection.Out),
 		{
 			BackgroundTransparency = 0.15,
-			Position = UDim2.new(.5,-170,.5,-75)
+			Position = UDim2.new(.5,-170,.5,-115)
 		}
 	)
 	guiTween:Play()
 
-	TweenService:Create(title,TweenInfo.new(.35),{TextTransparency=0}):Play()
-	TweenService:Create(status,TweenInfo.new(.35),{TextTransparency=0}):Play()
-	TweenService:Create(stroke,TweenInfo.new(.35),{Transparency=0}):Play()
+	title.TextTransparency = 0
+	aimStatus.TextTransparency = 0
+	espStatus.TextTransparency = 0
+	keyBtn.TextTransparency = 0
 end
 
 local function hideGUI()
@@ -197,24 +295,25 @@ local function hideGUI()
 
 	guiTween = TweenService:Create(
 		board,
-		TweenInfo.new(0.18, Enum.EasingStyle.Linear),
+		TweenInfo.new(0.2),
 		{
 			BackgroundTransparency = 1,
-			Position = UDim2.new(.5,-170,.56,-75)
+			Position = UDim2.new(.5,-170,.56,-115)
 		}
 	)
 	guiTween:Play()
 
-	TweenService:Create(title,TweenInfo.new(.15),{TextTransparency=1}):Play()
-	TweenService:Create(status,TweenInfo.new(.15),{TextTransparency=1}):Play()
-	TweenService:Create(stroke,TweenInfo.new(.15),{Transparency=1}):Play()
+	title.TextTransparency = 1
+	aimStatus.TextTransparency = 1
+	espStatus.TextTransparency = 1
+	keyBtn.TextTransparency = 1
 
-	task.delay(0.18,function()
+	task.delay(0.2,function()
 		board.Visible = false
 	end)
 end
 
--- ================= UPDATE =================
+-- ================= GUI UPDATE =================
 RunService.RenderStepped:Connect(function()
 	if GUI_VISIBLE then
 		if not board.Visible then showGUI() end
@@ -222,11 +321,12 @@ RunService.RenderStepped:Connect(function()
 		if board.Visible then hideGUI() end
 	end
 
-	status.Text = AIM_ON and "AIMLOCK : ON ["..AIM_KEY.Name.."]"
-		or "AIMLOCK : OFF ["..AIM_KEY.Name.."]"
-	status.TextColor3 = AIM_ON and Color3.fromRGB(80,255,120)
-		or Color3.fromRGB(255,80,80)
+	aimStatus.Text = AIM_ON and "AIMLOCK : ON [X]" or "AIMLOCK : OFF [X]"
+	aimStatus.TextColor3 = AIM_ON and Color3.fromRGB(80,255,120) or Color3.fromRGB(255,80,80)
 
-	keybtn.Text = waitingForKey and "PRESS ANY KEY..."
-		or ("GUI KEY : "..GUI_KEY.Name)
+	espStatus.Text = ESP_ON and "ESP POLICE : ON [N]" or "ESP POLICE : OFF [N]"
+	espStatus.TextColor3 = ESP_ON and Color3.fromRGB(80,255,120) or Color3.fromRGB(255,80,80)
+
+	keyBtn.Text = waitingForKey and "PRESS ANY KEY..."
+		or ("GUI KEY : "..GUI_KEY.Name:upper())
 end)
