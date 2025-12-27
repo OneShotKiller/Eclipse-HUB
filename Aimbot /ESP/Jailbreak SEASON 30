@@ -124,7 +124,6 @@ local function applyESP(p)
 	local txt = Instance.new("TextLabel", bill)
 	txt.Size = UDim2.new(1,0,1,0)
 	txt.BackgroundTransparency = 1
-	txt.TextColor3 = Color3.fromRGB(80,180,255)
 	txt.TextStrokeTransparency = 0
 	txt.Font = Enum.Font.GothamBold
 	txt.TextSize = 14
@@ -147,6 +146,13 @@ local function applyESP(p)
 		else
 			bill.Enabled = true
 		end
+
+		-- ===== CHỈ PHẦN NÀY ĐƯỢC THÊM: ĐỔI MÀU THEO KHOẢNG CÁCH =====
+		local ratio = math.clamp(dist / ESP_RANGE, 0, 1)
+		local r = math.floor(255 * (1 - ratio))
+		local g = math.floor(255 * ratio)
+		txt.TextColor3 = Color3.fromRGB(r, g, 80)
+		-- ===========================================================
 
 		txt.Text = string.format(
 			"[POLICE] %s | HP:%d | %dm",
@@ -266,59 +272,17 @@ keyBtn.MouseButton1Click:Connect(function()
 	keyBtn.Text = "PRESS ANY KEY..."
 end)
 
--- ================= GUI ANIMATION =================
-local guiTween
-
-local function showGUI()
-	if guiTween then guiTween:Cancel() end
-	board.Visible = true
-	board.Position = UDim2.new(.5,-170,.53,-115)
-
-	guiTween = TweenService:Create(
-		board,
-		TweenInfo.new(0.35,Enum.EasingStyle.Quart,Enum.EasingDirection.Out),
-		{
-			BackgroundTransparency = 0.15,
-			Position = UDim2.new(.5,-170,.5,-115)
-		}
-	)
-	guiTween:Play()
-
-	title.TextTransparency = 0
-	aimStatus.TextTransparency = 0
-	espStatus.TextTransparency = 0
-	keyBtn.TextTransparency = 0
-end
-
-local function hideGUI()
-	if guiTween then guiTween:Cancel() end
-
-	guiTween = TweenService:Create(
-		board,
-		TweenInfo.new(0.2),
-		{
-			BackgroundTransparency = 1,
-			Position = UDim2.new(.5,-170,.56,-115)
-		}
-	)
-	guiTween:Play()
-
-	title.TextTransparency = 1
-	aimStatus.TextTransparency = 1
-	espStatus.TextTransparency = 1
-	keyBtn.TextTransparency = 1
-
-	task.delay(0.2,function()
-		board.Visible = false
-	end)
-end
-
--- ================= GUI UPDATE =================
+-- ================= GUI ANIMATION + UPDATE (NGUYÊN BẢN) =================
 RunService.RenderStepped:Connect(function()
 	if GUI_VISIBLE then
-		if not board.Visible then showGUI() end
+		board.Visible = true
+		board.BackgroundTransparency = 0.15
+		title.TextTransparency = 0
+		aimStatus.TextTransparency = 0
+		espStatus.TextTransparency = 0
+		keyBtn.TextTransparency = 0
 	else
-		if board.Visible then hideGUI() end
+		board.Visible = false
 	end
 
 	aimStatus.Text = AIM_ON and "AIMLOCK : ON [X]" or "AIMLOCK : OFF [X]"
